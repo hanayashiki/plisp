@@ -1,18 +1,9 @@
-from plisp.evaluate import evaluate_list
-from plisp.ast import parse
-from io import StringIO
 from tests.utils import assert_exception
+from tests.utils import test_evaluate
 import re
 
 import sys
 #sys.setrecursionlimit(2**31 - 1)
-
-def test_evaluate(code : str, expected=None):
-  node = parse(StringIO(code))
-  result = '|'.join(map(str, evaluate_list(node)))
-  if expected and result != expected:
-    raise ValueError("Got [\n%s\n] when [\n%s\n] is expected. \nCode: \n=================\n%s\n=================\n" % (result, expected, code))
-  return result
 
 print(test_evaluate("(+ 1 2 3)"))
 
@@ -75,22 +66,22 @@ print(test_evaluate("""
 (if True 1 0)
 """, expected="1.0"))
 
-# print(test_evaluate("""
-#   (define (acc a b step func)
-#       (define (acc-iter n sum)
-#           (if (> n b) sum
-#               (acc-iter
-#                   (+ n step)
-#                   (+ sum (func n)))))
-#       (acc-iter a 0))
-#
-#   (define (PI n)
-#       (define (term n)
-#           (/ 1 (* n (+ n 2))))
-#       (* 8 (acc 1 n 4 term)))
-#
-#   (PI 2000)
-#   """))
+print(test_evaluate("""
+  (define (acc a b step func)
+      (define (acc-iter n sum)
+          (if (> n b) sum
+              (acc-iter
+                  (+ n step)
+                  (+ sum (func n)))))
+      (acc-iter a 0))
+
+  (define (PI n)
+      (define (term n)
+          (/ 1 (* n (+ n 2))))
+      (* 8 (acc 1 n 4 term)))
+
+  (PI 20000)
+  """))
 
 print(test_evaluate("""
 (define (acc a b step func)
@@ -117,34 +108,24 @@ assert_exception(lambda : test_evaluate(
 (- "abc" 1)
 """), ValueError)
 
-quine = \
-r"""
-
-(define code
-    (cons "(define dq (char 34))"
-    (cons "(define nl ' ')"
-    (cons "define (iter prepend aopend cur acc end)"
-    (cons "    (if (= cur null)"
-    (cons "        (strcat acc end)"
-    (cons "        (iter prepend append (cdr cur) (strcat prepend acc (car cur) append) end)"
-    (cons "    )"
-    (cons ")"
-    (cons "(iter (strcat '    (cons ' dq) (strcat dq nl) code (strcat '(define code' nl) ' null))))))))))))')"
-    (cons "(iter '' nl code '' '')"
-    (cons "" null))))))))))))
-
-(define dq (char 34))
-(define nl ' ')
-(define (iter prepend append cur acc end)
-    (if (= cur null) 
-        (strcat acc end)
-        (iter prepend append (cdr cur) (strcat acc prepend (car cur) append) end)
-    )
+print(test_evaluate("""
+(define (recurse n) 
+  (if (= n 0) 1
+    (* n 
+      (recurse (- n 1)))
+  )
 )
-(iter (strcat '    (cons ' dq) (strcat dq nl) code (strcat '(define code' nl) ' null))))))))')
-(iter '' nl code '' '')
-""".strip()
 
-print(test_evaluate(
-  quine
-, quine))
+(recurse 5)
+
+""", expected="None|120.0"))
+
+
+print(test_evaluate("""
+((lambda (x) (+ x 1)) 1)
+
+""", expected="2.0"))
+
+print(test_evaluate("""
+((lambda () 1))
+""", expected="1.0"))

@@ -11,7 +11,7 @@ class Entity:
     self.value = value
 
   def reduce(self, context, _list : ListNode):
-    raise NotImplementedError("%s don't have method %s" % (type(self), "reduce"))
+    context.raise_eval_exception("%r of %s does not have method %r" % (self.value, type(self), "reduce"))
 
 def built_in(name : str, *args, **kwargs):
   def cls_wrapper(cls : type):
@@ -27,6 +27,9 @@ class Null(Entity):
 
 class Operator(Entity):
   op_name = ""
+
+  def __str__(self):
+    return "<Operator %r>" % self.op_name
 
 class Scannable(Operator):
 
@@ -49,7 +52,7 @@ class Scannable(Operator):
         continue
       value = context.evaluate(node)
       if not self.type_check(type(value)):
-        raise ValueError("Operator %s got an unexpected type: %s:%s" % (self.op_name, node, type(value)))
+        context.raise_eval_exception("Operator %s got an unexpected type: %s:%s" % (self.op_name, node, type(value)))
       s = self.step(s, value)
     return s
 
@@ -65,11 +68,11 @@ class BinaryOp(Operator):
 
   def reduce(self, context, _list : ListNode):
     if len(_list) != 3:
-      raise ValueError("Operator %s needs exactly 2 parameters. " % self.op_name)
+      context.raise_eval_exception("Operator %s needs exactly 2 parameters. " % self.op_name)
     left = context.evaluate(_list[1])
     right = context.evaluate(_list[2])
     if not self.type_check(type(left), type(right)):
-      raise ValueError("Operator %s got unexpected types: %s, %s" % (self.op_name, type(left), type(right)))
+      context.raise_eval_exception("Operator %s got unexpected types: %s, %s" % (self.op_name, type(left), type(right)))
     return self.step(left, right)
 
 class UnaryOp(Operator):
@@ -84,10 +87,10 @@ class UnaryOp(Operator):
 
   def reduce(self, context, _list : ListNode):
     if len(_list) != 2:
-      raise ValueError("Operator %s needs exactly 1 parameters. " % self.op_name)
+      context.raise_eval_exception("Operator %s needs exactly 1 parameters. " % self.op_name)
     val = context.evaluate(_list[1])
     if not self.type_check(type(val)):
-      raise ValueError("Operator %s got an unexpected type: %s" % (self.op_name, type(val)))
+      context.raise_eval_exception("Operator %s got an unexpected type: %s" % (self.op_name, type(val)))
     return self.step(val)
 
 @built_in("+")
@@ -193,6 +196,11 @@ class Define(Operator):
     context.define(_list)
     return None
 
+@built_in(C.LAMBDA)
+class Lambda(Operator):
+  def reduce(self, context, _list : ListNode):
+    return context.lambda_(_list)
+
 class UserDefined(Entity):
 
   def __init__(self, name, node : Node, *args, **kwargs):
@@ -205,15 +213,27 @@ class UserAtom(UserDefined):
   def __init__(self, *args, **kwargs):
     super().__init__(*args, **kwargs)
 
+  def __str__(self):
+    return "<UserAtom %r at %x>" % (self.name, id(self))
+
 
 class UserFunc(UserDefined, Operator):
 
-  def __init__(self, captured : Dict[str, Entity], *args, **kwargs):
+  def __init__(self, captured : Dict[str, Entity], param_list : List, *args, **kwargs):
     super().__init__(*args, **kwargs)
     self.captured = captured
+    self.param_list = param_list
 
   def reduce(self, context, _list : ListNode):
-    return context.call(self.node, arg_list=_list, captured=self.captured)
+    return context.call(self.node, arg_list=_list, param_list=self.params, captured=self.captured)
+
+  def __str__(self):
+    return "<UserFunc %r at %x>" % (self.name, id(self))
+
+  @property
+  def params(self):
+    return self.param_list
+
 
 @built_in(C.IF)
 class If(Operator):
@@ -224,11 +244,11 @@ class If(Operator):
       alternative)
     """
     if len(_list) != 4:
-      raise ValueError("Operator %s needs exactly 3 parameters. " % self.op_name)
+      context.raise_eval_exception("Operator %s needs exactly 3 parameters. " % self.op_name)
 
     predicate = context.evaluate(_list[1])
     if predicate not in [True, False]:
-      raise ValueError("%s should be of type bool, got %s" % (_list[1], type(predicate)))
+      context.raise_eval_exception("%s should be of type bool, got %s" % (_list[1], type(predicate)))
 
     if predicate:
       return context.evaluate(_list[2])

@@ -9,6 +9,9 @@ class CodePos():
   def __str__(self):
     return str((self.row, self.column))
 
+  def copy(self):
+    return CodePos(self.row, self.column)
+
 class Node():
   position : CodePos
 
@@ -83,7 +86,7 @@ def parse(stream) -> Union[List[ListNode], List[AtomNode], None]:
     return c
 
   def get_position() -> CodePos:
-    return cur_pos
+    return cur_pos.copy()
 
   current_char = get_char()
 
@@ -123,9 +126,16 @@ def _parse_list(get_char : Callable[[], str],
                 get_cur_char : Callable[[], str]) -> ListNode:
 
   sub_nodes = []
+  pos = get_position()
   get_char()
+
   while True:
-    sub_nodes.append(_parse(get_char, get_position, get_cur_char))
+    token = _parse(get_char, get_position, get_cur_char)
+
+    if isinstance(token, AtomNode) and len(token.name) > 0:
+      sub_nodes.append(token)
+    elif isinstance(token, ListNode):
+      sub_nodes.append(token)
 
     while get_cur_char() is not None and get_cur_char().isspace():
       get_char()
@@ -137,7 +147,7 @@ def _parse_list(get_char : Callable[[], str],
     if get_cur_char() == None:
       raise ValueError("Unexpected EOF at %s" % get_position())
 
-  return ListNode(sub_nodes, get_position())
+  return ListNode(sub_nodes, pos)
 
 def _parse_atom(get_char : Callable[[], str],
                 get_position : Callable[[], CodePos],
