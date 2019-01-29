@@ -23,7 +23,7 @@ def print_asserted_expection(code):
 
 def test_evaluate(code : str, expected=None):
   node = parse(StringIO(code))
-  result = '|'.join(map(str, evaluate_list(code, node)))
+  result = '|'.join(map(str, evaluate_list(code, node, append_namespace=True)))
   if expected and result != expected:
     raise ValueError("Got [\n%s\n] when [\n%s\n] is expected. \nCode: \n=================\n%s\n=================\n" % (result, expected, code))
   return result

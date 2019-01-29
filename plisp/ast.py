@@ -44,6 +44,7 @@ class ListNode(Node):
 
   def __init__(self, container : List[Node], position : CodePos):
     super().__init__(position)
+    self.name = None
     self.container = container
 
   def __str__(self):
@@ -132,7 +133,7 @@ def _parse_list(get_char : Callable[[], str],
   while True:
     token = _parse(get_char, get_position, get_cur_char)
 
-    if isinstance(token, AtomNode) and len(token.name) > 0:
+    if isinstance(token, AtomNode) and (len(token.name) > 0 or token.str_value):
       sub_nodes.append(token)
     elif isinstance(token, ListNode):
       sub_nodes.append(token)

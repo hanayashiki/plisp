@@ -49,10 +49,12 @@ class TailRecursiveSignal:
 
 class Context:
 
-  def __init__(self, code, signal : AtomicSignal):
+  def __init__(self, code, signal : AtomicSignal, append_namespace : bool = False):
     self.code = code
     self.namespace_stack = [built_in_namespace]
     self.stack_trace = []
+    if append_namespace:
+      self.push_np()
     self.signal = signal
 
   def check_signal(self):
@@ -131,7 +133,7 @@ class Context:
 
     return False
 
-  def evaluate(self, node : ast.Node):
+  def evaluate(self, node : ast.Node, allow_tail_recursive=True):
     self.check_signal()
 
     if isinstance(node, ast.AtomNode):
@@ -147,10 +149,10 @@ class Context:
       if operator is None:
         self.raise_eval_exception("Unknown literal '%s'. " % node[0])
 
-        if not isinstance(operator, Entity):
-          operator = Entity(operator)
+      if not isinstance(operator, Entity):
+        operator = Entity(operator)
 
-      if self.is_tail_recursive(operator) and isinstance(operator, UserFunc):
+      if allow_tail_recursive and self.is_tail_recursive(operator) and isinstance(operator, UserFunc):
         return TailRecursiveSignal(node)
       else:
         try:
@@ -202,42 +204,40 @@ class Context:
       root_bound_names = set()
     root_bound_names.update(bound_names)
 
-    #print("root_bound_names: ", root_bound_names)
-
     def is_free(atom):
       not_bounded = atom.name not in root_bound_names and atom.name not in built_in_namespace
       can_lookup = not (self.atom_lookup(atom) is None)
       if not_bounded and not can_lookup:
-        self.raise_eval_exception("%s is used before defined. " % atom)
+        self.raise_eval_exception("'%s' is used before defined. " % atom)
       return not_bounded and can_lookup and not self.is_literal(atom)
 
     # node: (define (...) (define ...) (define ...) () )
-    for i in range(2, len(func_node)):
-      node = func_node[i]
-      if isinstance(node, ast.ListNode):
-        if isinstance(node[1], ast.AtomNode) and (node[0].name == C.DEFINE or node[0].name == C.LAMBDA):
-          root_bound_names.add(node[1].name)
-          captured.update(self.capture(node, root_bound_names.copy()))
-        elif isinstance(node[1], ast.ListNode) and (node[0].name == C.DEFINE or node[0].name == C.LAMBDA):
-          root_bound_names.add(node[1][0].name)
-          captured.update(self.capture(node, root_bound_names.copy()))
-        else:
-          for atom in self.iter_atom(node):
-            if is_free(atom):
-              captured[atom.name] = self.lookup(atom)
-      elif isinstance(node, ast.AtomNode):
-        if is_free(node):
-          captured[node.name] = self.lookup(node)
+    for n in self.iter_node(func_node[2:]):
+      if isinstance(n, ast.AtomNode):
+        if is_free(n):
+          captured[n.name] = self.atom_lookup(n)
+      elif n[0].name == C.DEFINE and isinstance(n[1], ast.AtomNode):
+        root_bound_names.add(n[1].name)
+        captured.update(self.capture(n, root_bound_names.copy()))
+      elif n[0].name == C.DEFINE and isinstance(n[1], ast.ListNode):
+        root_bound_names.add(n[1][0].name)
+        captured.update(self.capture(n, root_bound_names.copy()))
+      elif n[0].name == C.LAMBDA:
+        captured.update(self.capture(n, root_bound_names.copy()))
+
+    print("captured:", captured)
 
     return captured
 
   @staticmethod
-  def iter_atom(list_node : ast.ListNode):
+  def iter_node(list_node : ast.ListNode):
     for node in list_node:
-      if isinstance(node, ast.AtomNode):
+      if isinstance(node, ast.ListNode) and len(node) >= 1 and node[0].name in [C.DEFINE, C.LAMBDA]:
+        yield node
+      elif isinstance(node, ast.AtomNode):
         yield node
       else:
-        for _node in Context.iter_atom(node):
+        for _node in Context.iter_node(node):
           yield _node
 
   def call(self, node : ast.ListNode,
@@ -251,7 +251,7 @@ class Context:
                                   (node[1][0].name, len(arg_list) - 1, len(param_list)))
       for i in range(1, len(arg_list)):
         param_name = param_list[i - 1].name
-        value = self.evaluate(arg_list[i])
+        value = self.evaluate(arg_list[i], allow_tail_recursive=False)
         param_namespace[param_name] = value
       self.push_np(param_namespace)
 
@@ -295,10 +295,10 @@ class Context:
     self.namespace_stack[-1][name] = Entity
 
 
-def evaluate_list(code, node_list : List[ast.Node], timeout=10):
+def evaluate_list(code, node_list : List[ast.Node], timeout=10, append_namespace=False):
 
   signal = AtomicSignal()
-  context = Context(code, signal)
+  context = Context(code, signal, append_namespace=append_namespace)
 
   import time
 

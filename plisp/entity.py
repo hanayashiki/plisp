@@ -13,6 +13,9 @@ class Entity:
   def reduce(self, context, _list : ListNode):
     context.raise_eval_exception("%r of %s does not have method %r" % (self.value, type(self), "reduce"))
 
+  def __repr__(self):
+    return str(self)
+
 def built_in(name : str, *args, **kwargs):
   def cls_wrapper(cls : type):
     global built_in_namespace
@@ -23,7 +26,9 @@ def built_in(name : str, *args, **kwargs):
 
 @built_in("null")
 class Null(Entity):
-  pass
+
+  def __str__(self):
+    return "null"
 
 class Operator(Entity):
   op_name = ""
@@ -32,6 +37,10 @@ class Operator(Entity):
     return "<Operator %r>" % self.op_name
 
 class Scannable(Operator):
+
+  @staticmethod
+  def is_reversed():
+    return False
 
   @staticmethod
   def step(s, new):
@@ -47,9 +56,13 @@ class Scannable(Operator):
 
   def reduce(self, context, _list : ListNode):
     s = self.begin()
-    for idx, node in enumerate(_list):
-      if idx == 0:
-        continue
+
+    if self.is_reversed():
+      _list = reversed(_list.container[1:])
+    else:
+      _list = _list.container[1:]
+
+    for node in _list:
       value = context.evaluate(node)
       if not self.type_check(type(value)):
         context.raise_eval_exception("Operator %s got an unexpected type: %s:%s" % (self.op_name, node, type(value)))
@@ -151,10 +164,12 @@ class Equal(BinaryOp):
 
   @staticmethod
   def type_check(t1, t2):
-    return ((t1 == int or t1 == float) and (t2 == int or t2 == float)) or (t1 == str and t2 == str) or (t1 == Null or t2 == Null)
+    return ((t1 == int or t1 == float) and (t2 == int or t2 == float)) or (t1 == str and t2 == str) or (t1 == Null or t2 == Null) or (t1 == bool and t2 == bool)
 
   @staticmethod
   def step(left, right):
+    print("left:", left)
+    print("right:", right)
     return left == right
 
 @built_in("<")
@@ -309,3 +324,22 @@ class Char(UnaryOp):
   @staticmethod
   def step(val):
     return str(chr(int(val)))
+
+@built_in("list")
+class List(Scannable):
+
+  @staticmethod
+  def is_reversed():
+    return True
+
+  @staticmethod
+  def type_check(t):
+    return True
+
+  @staticmethod
+  def step(s, new):
+    return (new, s)
+
+  @staticmethod
+  def begin():
+    return Null()

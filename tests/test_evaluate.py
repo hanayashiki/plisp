@@ -19,7 +19,7 @@ print(test_evaluate("""
 (define z 19260817)
 (define 1.0 2) 
 (define y 
-  (define z (* 1.0 y)) z) 
+  (define z (* 1.0 1.0)) z) 
 1.0
 y
 """, expected="None|None|None|2.0|4.0"))
@@ -129,3 +129,71 @@ print(test_evaluate("""
 print(test_evaluate("""
 ((lambda () 1))
 """, expected="1.0"))
+
+print(test_evaluate("""
+(define (not x) (if (= x True) True False))
+(define (true? x) (not(not x))) 
+(true? True)
+""", expected="None|None|True"))
+
+print(test_evaluate("""
+(define (asd)1) (define (dsa)(asd)) (dsa) 
+""", expected="None|None|1.0"))
+
+print(test_evaluate("""
+(define (mycons a b) 
+  (lambda (getter) (getter a b)))
+(define (mycar x)
+  (x (lambda (x y) x)))
+(define (mycdr x)
+  (x (lambda (x y) y)))
+  
+(mycar (mycons 1 2))
+(mycdr (mycons 1 2))
+""", expected="None|None|None|1.0|2.0"))
+
+print(test_evaluate("""
+(define def define)
+(def lam lambda)
+
+(def eq =)
+
+(def nil null)
+(def Tru True)
+(def Fal False)
+
+(def (nilp x) (eq x nil))
+(def (not x) (if (eq x Fal) Tru Fal))
+(def (true? x) (not(not x)))
+
+(def (length xs)
+  (if (nilp xs) 0
+    (+ (length(cdr xs)) 1)
+) )
+(def len length)
+
+(def (last xs)
+  (if (= (len xs) 1.0)
+    (car xs)
+    123)
+) 
+
+(len (cons 1 null))
+(= (len (cons 1 null)) 1.0)
+(last (cons 1 null))
+"""))
+
+print(test_evaluate("""
+(define (plus-a a)
+  (if (> a 0)
+    (lambda (x) (+ x a))
+    (lambda (x) (+ x a))
+  ))
+
+(define plus-1 (plus-a 1))
+(plus-1 1)
+""", expected="None|None|2.0"))
+
+print(test_evaluate("""
+(list 1 2 3)
+""", expected="(1.0, (2.0, (3.0, null)))"))
